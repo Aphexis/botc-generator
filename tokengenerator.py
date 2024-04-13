@@ -1,4 +1,4 @@
-from PIL import Image, ImageDraw
+from PIL import Image, ImageOps
 import json
 import requests
 import os
@@ -15,10 +15,6 @@ def create_circular_icon(icon_path, text_path, background_path, output_path, tok
     circle_diameter = token_size
 
     # Resize icon to fit inside the circle (with padding)
-    # if (not oversized):
-    #     icon_padding = 70 # 15%
-    # else:
-    #     icon_padding = 130 # 28%
     icon = icon.resize((circle_diameter-icon_padding, circle_diameter-icon_padding), Image.LANCZOS)
 
     # Resize background to fit inside the circle
@@ -33,12 +29,38 @@ def create_circular_icon(icon_path, text_path, background_path, output_path, tok
     background.paste(text, ((background.width - circle_diameter) // 2 + text_padding_w, (background.height - circle_diameter) // 2 + text_padding_h), text)
 
     # Create a circular mask
-    mask = Image.new("L", (circle_diameter, circle_diameter), 0)
-    draw = ImageDraw.Draw(mask)
-    draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
+    # mask = Image.new("L", (circle_diameter, circle_diameter), 0)
+    # draw = ImageDraw.Draw(mask)
+    # draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
 
-    # Apply mask to the icon
-    background.putalpha(mask)
+    # # Apply mask to the icon
+    # background.putalpha(mask)
+
+    # Save the final image
+    background.save(output_path)
+
+def create_hex_icon(icon_path, text_path, background_path, output_path, token_size, icon_padding, extra_icon_padding_h):
+    # Load images
+    icon = Image.open(icon_path).convert("RGBA")
+    background = Image.open(background_path).convert("RGBA")
+    text = Image.open(text_path).convert("RGBA")
+
+    # Calculate circle diameter in pixels
+    circle_diameter = token_size
+
+    # Resize icon to fit inside the circle (with padding)
+    icon = icon.resize((circle_diameter-icon_padding, circle_diameter-icon_padding), Image.LANCZOS)
+
+    # Resize background to fit inside the dimensions
+    background = ImageOps.contain(background, (circle_diameter, circle_diameter))
+
+    # Paste icon onto the background
+    icon_padding_w = icon_padding // 2
+    icon_padding_h = icon_padding // 2 - extra_icon_padding_h
+    background.paste(icon, ((background.width - circle_diameter) // 2 + icon_padding_w, (background.height - circle_diameter) // 2 + icon_padding_h), icon)
+    text_padding_w = (circle_diameter - text.width) // 2
+    text_padding_h = (circle_diameter - text.height) // 2
+    background.paste(text, ((background.width - circle_diameter) // 2 + text_padding_w, (background.height - circle_diameter) // 2 + text_padding_h), text)
 
     # Save the final image
     background.save(output_path)
@@ -52,7 +74,6 @@ def create_text(text, pad_size, font_filepath, font_size, color, size, shadow, o
         curve_degree=-360,
         image_width=size, #460,
         image_height=size, #460,
-        # padding=padding, #100,
         shadow=shadow,
         filename=output_filename
     )
@@ -78,10 +99,8 @@ def create_token(char):
         icon_path=requests.get(char['image'], stream=True).raw,
         text_path=text_outputfile,
         background_path="tokenbg_wideoutline.png",
-        output_path=f"output/{char['name']}_token.png",
+        output_path=f"output/characters/{char['name']}_token.png",
         token_size=460,
-        # oversized=char.get("oversized", False),
-        # raise_token=char.get("raiseToken", False)
         icon_padding=icon_padding,
         extra_icon_padding_h=icon_padding_h
     )
@@ -91,9 +110,9 @@ def create_reminders(char):
     oversized = char.get("oversized", False)
     raise_token = char.get("raiseToken", False)
     if (not oversized):
-        icon_padding = 40 # 15%
+        icon_padding = 50
     else:
-        icon_padding = 70 # 28%
+        icon_padding = 75
     if (raise_token or oversized):
         icon_padding_h = 10
     else:
@@ -101,12 +120,12 @@ def create_reminders(char):
     # print(oversized, raise_token, icon_padding, icon_padding_h)
     for reminder in char['reminders']:
         text_outputfile = f"output/{char['name']}_{reminder}.png" 
-        create_text(text=reminder, pad_size=60, font_filepath="Trade Gothic LT Std Regular.otf", font_size=30, color="#FFFFFF", size=170, shadow=False, output_filename=text_outputfile) 
-        create_circular_icon(
+        create_text(text=reminder, pad_size=60, font_filepath="Trade Gothic LT Std Regular.otf", font_size=20, color="#FFFFFF", size=170, shadow=False, output_filename=text_outputfile) 
+        create_hex_icon(
             icon_path=requests.get(char['image'], stream=True).raw,
             text_path=text_outputfile,
-            background_path="reminderbg_outlined.png",
-            output_path=f"output/{char['name']}_{reminder}_reminder.png",
+            background_path="reminderbg_hex.png",
+            output_path=f"output/reminders/{char['name']}_{reminder}_reminder.png",
             token_size=200,
             icon_padding=icon_padding,
             extra_icon_padding_h=icon_padding_h
@@ -129,10 +148,20 @@ if not folder_exists:
    # Create a new directory because it does not exist
    os.makedirs("output")
 
+folder_exists = os.path.exists("output/characters")
+if not folder_exists:
+   # Create a new directory because it does not exist
+   os.makedirs("output/characters")
+
+folder_exists = os.path.exists("output/reminders")
+if not folder_exists:
+   # Create a new directory because it does not exist
+   os.makedirs("output/reminders")
+
 # Example usage:
 # create_circle_icon("icon.png", "Short text", "background.jpg", "output.png", "YourFont.ttf", 10)  # Assuming 10 pixels per millimeter
 # create_token("fenrisagent_defenders_of_europa_ravenswood.png", "fenrisagent_text.png", "tokenbg_wideoutline.png", "output.png", "dum1.ttf", 10)  # Assuming 10 pixels per millimeter
-# create_from_json("botc_scythe.json")
+create_from_json("botc_scythe.json")
 
 # akiko = {
 #     "id": "akiko_defenders_of_europa_ravenswood",
@@ -165,18 +194,32 @@ if not folder_exists:
 #   }
 # create_reminders(vesna)
 
-kar = {
-    "id": "kar_defenders_of_europa_ravenswood",
-    "image": "https://www.bloodstar.xyz/p/nobadinohz/defenders_of_europa_ravenswood/kar_defenders_of_europa_ravenswood.png",
-    "otherNightReminder": "Kar might choose a player. If this player is a demon, decrease the Demon targets by 1 tonight, and the chosen player switches seats with Zehra.",
-    "reminders": ["-1 Desolation Targets", "Demon chosen", "No ability"],
-    "setup": True,
-    "name": "Kar",
-    "team": "townsfolk",
-    "ability": "Once per game, at night*, choose a player: If a Demon is chosen, decrease the number of Demon targets by 1 tonight; they switch seats with Zehra. [+Zehra]",
-    "otherNight": 5,
-    "raiseToken": True
-    # "oversized": True
-  }
+# kar = {
+#     "id": "kar_defenders_of_europa_ravenswood",
+#     "image": "https://www.bloodstar.xyz/p/nobadinohz/defenders_of_europa_ravenswood/kar_defenders_of_europa_ravenswood.png",
+#     "otherNightReminder": "Kar might choose a player. If this player is a demon, decrease the Demon targets by 1 tonight, and the chosen player switches seats with Zehra.",
+#     "reminders": ["-1 Desolation Targets", "Demon chosen", "No ability"],
+#     "setup": True,
+#     "name": "Kar",
+#     "team": "townsfolk",
+#     "ability": "Once per game, at night*, choose a player: If a Demon is chosen, decrease the number of Demon targets by 1 tonight; they switch seats with Zehra. [+Zehra]",
+#     "otherNight": 5,
+#     "raiseToken": True
+#     # "oversized": True
+#   }
 # create_token(kar)
-create_reminders(kar)
+# create_reminders(kar)
+
+# desolation = {
+#     "id": "desolation_defenders_of_europa_ravenswood",
+#     "image": "https://www.bloodstar.xyz/p/nobadinohz/defenders_of_europa_ravenswood/desolation_defenders_of_europa_ravenswood.png",
+#     "otherNightReminder": "Wake Desolation one-by-one, rotating around the town square. Each woken Desolation that may kill chooses a player. Each Desolation might choose another Desolation to switch seats with. If they do, they gain a vote today.",
+#     "reminders": ["Dead", "+1 vote", "Chosen", "Swap", "Ability used"],
+#     "setup": True,
+#     "name": "Desolation",
+#     "team": "demon",
+#     "ability": "Each night*, choose a player: They die. Repeat up to half the number of nights (rounded up) times. Once per game, at night*, choose another Desolation: Switch seats with them and gain a vote today. [All Minions are Desolation]",
+#     "otherNight": 7,
+#     "oversized": True
+#   }
+# create_reminders(desolation)
